@@ -1,0 +1,1372 @@
+<!-- =========================================================================
+File: pool_dashboard.html
+Location: snap-coin-pool/static/pool_dashboard.html
+Version: 1.3.5
+
+Changes from v1.3.4:
+  - LAYOUT: Rename "Live Snapshot" to "Pool Snapshot", move pool_fee and
+    pool_diff into it. Rename "Pool Health" to "Network Health" with only
+    network stats remaining.
+  - No other behavior/layout changes.
+
+Notes:
+  - NodeConnected / NodeHealth still update topbar only (not written to feed).
+========================================================================  -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Snap Coin Pool — Dashboard</title>
+
+  <style>
+    :root{
+      --bg: #070a0f;
+      --panel: rgba(255,255,255,0.04);
+      --panel2: rgba(255,255,255,0.06);
+      --border: rgba(255,255,255,0.12);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.62);
+
+      --green: #4cff9b;
+      --cyan: #6fe7ff;
+      --yellow: #ffe066;
+      --red: #ff5c7a;
+      --orange: #ffb86b;
+
+      --shadow: 0 10px 30px rgba(0,0,0,0.45);
+      --radius: 16px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    *{ box-sizing: border-box; }
+    body{
+      margin:0;
+      background:
+        radial-gradient(1200px 600px at 20% -10%, rgba(76,255,155,0.14), transparent 60%),
+        radial-gradient(900px 500px at 90% 0%, rgba(111,231,255,0.12), transparent 55%),
+        radial-gradient(900px 500px at 70% 120%, rgba(255,224,102,0.08), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+    }
+
+    .wrap{
+      max-width: 1520px;
+      margin: 0 auto;
+      padding: 22px 18px 40px 18px;
+    }
+
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      min-width: 360px;
+      flex: 1 1 auto;
+    }
+
+    .logo{
+      width:44px; height:44px;
+      border-radius: 14px;
+      background:
+        linear-gradient(135deg, rgba(76,255,155,0.22), rgba(111,231,255,0.18)),
+        rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-family: var(--mono);
+      font-weight:800;
+      letter-spacing: 0.5px;
+    }
+
+    .titleblock{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+
+    h1{
+      margin:0;
+      font-size: 18px;
+      letter-spacing: 0.2px;
+      font-weight: 800;
+    }
+
+    .subtitle{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .statuswrap{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      flex: 0 0 auto;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .statuspill{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .dot{
+      width:10px; height:10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.25);
+      box-shadow: 0 0 0 4px rgba(255,255,255,0.04);
+    }
+    .dot.ok{ background: var(--green); box-shadow: 0 0 0 4px rgba(76,255,155,0.12); }
+    .dot.bad{ background: var(--red); box-shadow: 0 0 0 4px rgba(255,92,122,0.12); }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.18);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: rgba(255,255,255,0.75);
+    }
+
+    .pill .k{ color: rgba(255,255,255,0.55); }
+    .pill .v{ color: rgba(255,255,255,0.90); font-weight: 800; }
+
+    /* Node pill status marker (small dot) */
+    .ndot{
+      width:8px; height:8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.20);
+      box-shadow: 0 0 0 4px rgba(255,255,255,0.04);
+      margin-right: 2px;
+      flex: 0 0 auto;
+    }
+    .ndot.ok{ background: var(--green); box-shadow: 0 0 0 4px rgba(76,255,155,0.10); }
+    .ndot.bad{ background: var(--red); box-shadow: 0 0 0 4px rgba(255,92,122,0.10); }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.35fr 0.95fr;
+      gap: 18px;
+    }
+
+    .card{
+      border-radius: var(--radius);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+
+    .head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent);
+    }
+
+    .head h2{
+      margin:0;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+    }
+
+    .hint{
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .body{
+      padding: 16px;
+    }
+
+    .kpis{
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    /* KPI cards are now center-justified */
+    .kpi{
+      background: var(--panel2);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 14px;
+      padding: 12px 12px;
+      min-height: 86px;
+
+      display:flex;
+      flex-direction:column;
+      align-items:center;     /* center horizontally */
+      justify-content:center; /* center vertically */
+      text-align:center;
+      gap: 6px;
+    }
+
+    .label{
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .value{
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: 0.2px;
+      margin: 0;
+    }
+
+    .sub{
+      font-family: var(--mono);
+      font-size: 11px;
+      color: rgba(255,255,255,0.55);
+      margin: 0;
+    }
+
+    .accent-green{ color: var(--green); }
+    .accent-cyan{ color: var(--cyan); }
+    .accent-yellow{ color: var(--yellow); }
+    .accent-red{ color: var(--red); }
+    .accent-orange{ color: var(--orange); }
+
+    .twocol{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .panel{
+      background: rgba(0,0,0,0.18);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .rows .row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .rows .row:last-child{ border-bottom:none; }
+
+    .left{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(255,255,255,0.72);
+    }
+
+    .right{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(255,255,255,0.92);
+      font-weight: 800;
+      text-align:right;
+    }
+
+    .realestate{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .placeholder{
+      background: rgba(0,0,0,0.20);
+      border: 1px dashed rgba(255,255,255,0.18);
+      border-radius: 14px;
+      padding: 12px;
+      min-height: 120px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      gap: 10px;
+    }
+
+    .ph-title{
+      font-family: var(--mono);
+      font-size: 11px;
+      color: rgba(255,255,255,0.70);
+    }
+
+    .ph-desc{
+      font-family: var(--mono);
+      font-size: 11px;
+      color: rgba(255,255,255,0.50);
+      line-height: 1.45;
+    }
+
+    .controls{
+      display:flex;
+      gap: 10px;
+      flex-wrap:wrap;
+      margin-bottom: 12px;
+    }
+
+    input[type="text"]{
+      flex: 1;
+      min-width: 240px;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.26);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      outline: none;
+    }
+
+    input[type="text"]::placeholder{ color: rgba(255,255,255,0.35); }
+
+    button{
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      cursor:pointer;
+    }
+    button:hover{ background: rgba(255,255,255,0.09); }
+    button:active{ transform: translateY(1px); }
+
+    .muted{
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .mini-table{
+      width:100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .mini-table td{
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      vertical-align: top;
+    }
+    .mini-table tr:last-child td{ border-bottom: none; }
+    .mini-table td:first-child{
+      color: rgba(255,255,255,0.62);
+      width: 46%;
+      padding-right: 12px;
+    }
+    .mini-table td:last-child{
+      color: rgba(255,255,255,0.92);
+      font-weight: 800;
+      text-align: right;
+      word-break: break-all;
+    }
+
+    .picker{
+      display:flex;
+      flex-wrap:wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .chip{
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.18);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: rgba(255,255,255,0.78);
+      cursor: pointer;
+      user-select: none;
+    }
+    .chip:hover{ background: rgba(255,255,255,0.06); }
+
+    .feed{
+      max-height: 520px;
+      overflow:auto;
+      padding-right: 6px;
+    }
+
+    .evt{
+      border-left: 3px solid rgba(255,255,255,0.18);
+      background: rgba(0,0,0,0.18);
+      border-radius: 12px;
+      padding: 10px 10px;
+      margin-bottom: 10px;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .evt .t{ color: rgba(255,255,255,0.50); margin-right: 8px; }
+    .evt .tag{ font-weight: 900; }
+
+    .evt.share{ border-left-color: var(--green); }
+    .evt.reject{ border-left-color: var(--red); }
+    .evt.block{ border-left-color: var(--yellow); }
+    .evt.payout{ border-left-color: var(--cyan); }
+    .evt.miner{ border-left-color: rgba(255,255,255,0.35); }
+
+    @media (max-width: 1100px){
+      .grid{ grid-template-columns: 1fr; }
+      .kpis{ grid-template-columns: repeat(2, 1fr); }
+      .realestate{ grid-template-columns: 1fr; }
+      .brand{ min-width: 0; }
+      .statuswrap{ justify-content: flex-start; }
+    }
+
+    ::-webkit-scrollbar { width: 10px; height:10px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0.25); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.20); }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">SC</div>
+        <div class="titleblock">
+          <h1>Snap Coin Pool</h1>
+          <div class="subtitle">
+            Live dashboard · WS: <span id="ws-url"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="statuswrap">
+        <!-- WebSocket status -->
+        <div class="statuspill" title="WebSocket connection status">
+          <span id="status-dot" class="dot"></span>
+          <span id="status-text">Connecting…</span>
+          <span class="pill" title="Last event time (local)">
+            last_evt: <span id="last-evt" class="v">—</span>
+          </span>
+        </div>
+
+        <!-- Node health (updates from NodeConnected/NodeHealth events; not shown in feed) -->
+        <div class="statuspill" title="Node health (pool ↔ node)">
+          <span id="node-dot" class="ndot"></span>
+          <span class="pill" title="Node address">
+            <span class="k">addr:</span> <span id="node-addr" class="v">—</span>
+          </span>
+          <span class="pill" title="Last round-trip time (pool↔node)">
+            <span class="k">rtt:</span> <span id="node-rtt" class="v">—</span>
+          </span>
+          <span class="pill" title="Consecutive failures (since last OK)">
+            <span class="k">fails:</span> <span id="node-fails" class="v">—</span>
+          </span>
+          <span class="pill" title="Last OK timestamp (node side)">
+            <span class="k">last_ok:</span> <span id="node-lastok" class="v">—</span>
+          </span>
+          <span class="pill" title="Connect timing (tcp / first-ok)">
+            <span class="k">conn:</span> <span id="node-conn" class="v">—</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+
+      <!-- LEFT: Overview -->
+      <div class="card">
+        <div class="head">
+          <h2>Pool Overview</h2>
+          <div class="hint">fixed diff hashrate + conventional placeholders</div>
+        </div>
+
+        <div class="body">
+          <div class="kpis">
+            <div class="kpi">
+              <div class="label">ACTIVE MINERS</div>
+              <div id="kpi-miners" class="value accent-cyan">0</div>
+              <div class="sub">unique miner IDs seen (session)</div>
+            </div>
+
+            <div class="kpi">
+              <div class="label">POOL HASHRATE</div>
+              <div id="kpi-hr" class="value accent-orange">—</div>
+              <div class="sub">estimated from accepted shares (window)</div>
+            </div>
+
+            <div class="kpi">
+              <div class="label">SHARES (ACC / REJ)</div>
+              <div class="value">
+                <span id="kpi-acc" class="accent-green">0</span>
+                <span style="color:rgba(255,255,255,0.35)">/</span>
+                <span id="kpi-rej" class="accent-red">0</span>
+              </div>
+              <div class="sub">since page load</div>
+            </div>
+
+            <div class="kpi">
+              <div class="label">BLOCKS FOUND</div>
+              <div id="kpi-blocks" class="value accent-yellow">0</div>
+              <div class="sub">since page load</div>
+            </div>
+          </div>
+
+          <div class="twocol">
+            <div class="panel">
+              <div class="label">Network Health</div>
+              <div class="rows">
+                <!-- NetworkStats (from backend WS) -->
+                <div class="row">
+                  <div class="left">network_height</div>
+                  <div class="right" id="net-height">—</div>
+                </div>
+                <div class="row">
+                  <div class="left">network_hashrate</div>
+                  <div class="right" id="net-hashrate">—</div>
+                </div>
+                <div class="row">
+                  <div class="left">network_difficulty</div>
+                  <div class="right" id="net-difficulty">—</div>
+                </div>
+                <div class="row">
+                  <div class="left">block_reward</div>
+                  <div class="right" id="net-reward">—</div>
+                </div>
+                <div class="row">
+                  <div class="left">last_block_age</div>
+                  <div class="right" id="net-last-age">—</div>
+                </div>
+                <div class="row">
+                  <div class="left">avg_block_time</div>
+                  <div class="right" id="net-avg-bt">—</div>
+                </div>
+                <div class="row">
+                  <div class="left">last_hash</div>
+                  <div class="right" id="net-last-hash">—</div>
+                </div>
+              </div>
+              <div class="muted" style="margin-top:10px;">
+                Network stats are pushed via <span class="accent-cyan">NetworkStats</span> on the WS feed.
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="label">Pool Snapshot</div>
+              <div class="rows">
+                <div class="row">
+                  <div class="left">pool_fee</div>
+                  <div class="right">2.0%</div>
+                </div>
+                <div class="row">
+                  <div class="left">pool_diff (fixed)</div>
+                  <div class="right">65536</div>
+                </div>
+                <div class="row">
+                  <div class="left">last_share_height</div>
+                  <div class="right" id="snap-last-share">—</div>
+                </div>
+                <div class="row">
+                  <div class="left">last_share_miner</div>
+                  <div class="right" id="snap-last-miner">—</div>
+                </div>
+                <div class="row">
+                  <div class="left">last_block_height</div>
+                  <div class="right" id="snap-last-block">—</div>
+                </div>
+                <div class="row">
+                  <div class="left">last_payout_height</div>
+                  <div class="right" id="snap-last-payout">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="realestate">
+            <div class="placeholder">
+              <div>
+                <div class="ph-title">REAL ESTATE: Hashrate Chart</div>
+                <div class="ph-desc">
+                  Placeholder for sparkline over time. We have pool HR now; next step is
+                  sampling it every few seconds into an array and drawing a tiny canvas graph.
+                </div>
+              </div>
+              <div class="pill">todo: sparkline</div>
+            </div>
+
+            <div class="placeholder">
+              <div>
+                <div class="ph-title">REAL ESTATE: Difficulty / Target</div>
+                <div class="ph-desc">
+                  Fixed-diff pool: still useful to show share target, vardiff status (off),
+                  and miner difficulty if you ever add per-miner diff.
+                </div>
+              </div>
+              <div class="pill">todo: targets</div>
+            </div>
+
+            <div class="placeholder">
+              <div>
+                <div class="ph-title">REAL ESTATE: Payouts</div>
+                <div class="ph-desc">
+                  Show payout scheme, last payout txid, miners paid, and pool fee output.
+                </div>
+              </div>
+              <div class="pill">todo: payout txid</div>
+            </div>
+
+            <div class="placeholder">
+              <div>
+                <div class="ph-title">REAL ESTATE: Top Miners</div>
+                <div class="ph-desc">
+                  We can compute top miners by hashrate (window) or by total work units.
+                  Next step: render a simple top-5 list.
+                </div>
+              </div>
+              <div class="pill">todo: top miners</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- RIGHT: Miner check + feed -->
+      <div>
+        <div class="card" style="margin-bottom: 18px;">
+          <div class="head">
+            <h2>Miner Check (by addy)</h2>
+            <div class="hint">exact match (session)</div>
+          </div>
+
+          <div class="body">
+            <div class="controls">
+              <input id="miner-input" type="text" placeholder="enter miner id / address (exact match to event.miner)"/>
+              <button id="miner-btn">Check</button>
+              <button id="miner-clear">Clear</button>
+            </div>
+
+            <div class="muted" style="margin-bottom: 10px;">
+              Pool currently identifies miners by the string shown in events (ex: <span class="accent-cyan">26203a09</span>).
+              If you later broadcast full wallet addy, you can search by that too.
+            </div>
+
+            <div class="panel">
+              <table class="mini-table">
+                <tr><td>miner</td><td id="m-miner">—</td></tr>
+                <tr><td>connected (seen)</td><td id="m-connected">—</td></tr>
+                <tr><td>last_ip</td><td id="m-ip">—</td></tr>
+                <tr><td>shares_accepted</td><td id="m-acc">—</td></tr>
+                <tr><td>shares_rejected</td><td id="m-rej">—</td></tr>
+                <tr><td>last_share_height</td><td id="m-last-h">—</td></tr>
+                <tr><td>work_total (session)</td><td id="m-work">—</td></tr>
+                <tr><td>hashrate (window)</td><td id="m-hr">—</td></tr>
+              </table>
+              <div class="muted" style="margin-top: 10px;">
+                Hashrate uses fixed diff 65536 and last N accepted shares timing (browser receive-time).
+              </div>
+            </div>
+
+            <div class="picker" id="miner-picker" style="display:none;"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="head">
+            <h2>Live Event Feed</h2>
+            <div class="hint">last 120 events</div>
+          </div>
+          <div class="body">
+            <div id="feed" class="feed"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+(() => {
+  // -------------------------------------------------------------------------
+  // Config
+  // -------------------------------------------------------------------------
+  const SHARE_DIFF = 65536;        // fixed pool diff (from your pool log)
+  const HR_WINDOW_SHARES = 20;     // window size (shares)
+  const MAX_TS = 300;             // cap buffers
+  const FEED_MAX = 120;
+
+  // ── Coin display config ─────────────────────────────────────────────
+  // Adjust COIN_DECIMALS to match your coin's atomic-unit exponent.
+  // e.g. 8 means 1 SNAP = 100,000,000 atomic units (like Bitcoin satoshis).
+  const COIN_DECIMALS = 8;
+  const COIN_SYMBOL  = "SNAP";
+  const COIN_DIVISOR = Math.pow(10, COIN_DECIMALS);
+
+  // -------------------------------------------------------------------------
+  // State
+  // -------------------------------------------------------------------------
+  const state = {
+    connected: false,
+    lastEvtMs: 0,
+
+    // session counters
+    minersActive: new Set(),
+    sharesAccepted: 0,
+    sharesRejected: 0,
+    blocksFound: 0,
+
+    // last seen
+    lastShareHeight: null,
+    lastShareMiner: null,
+    lastBlockHeight: null,
+    lastPayoutHeight: null,
+
+    // timestamps for hashrate estimation
+    poolShareTimesMs: [], // accepted shares timestamps
+
+    // per-miner aggregation
+    miners: new Map(), // minerId -> record
+
+    // node health (populated via NodeConnected/NodeHealth)
+    node: {
+      addr: null,
+      ok: null,
+      rtt_ms: null,
+      fails: null,
+      last_ok_ts: null,
+      tcp_connect_ms: null,
+      first_ok_ms: null,
+      last_update_ms: 0,
+    },
+
+    // network stats (populated via NetworkStats)
+    net: {
+      hashrate_hs: null,
+      difficulty: null,
+      height: null,
+      reward: null,
+      last_hash: null,
+      last_block_secs_ago: null,
+      avg_block_time_secs: null,
+      last_update_ms: 0,
+    },
+  };
+
+  // -------------------------------------------------------------------------
+  // DOM helpers
+  // -------------------------------------------------------------------------
+  const el = (id) => document.getElementById(id);
+
+  const statusDot = el("status-dot");
+  const statusText = el("status-text");
+  const lastEvt = el("last-evt");
+  const wsUrlLabel = el("ws-url");
+
+  const nodeDot = el("node-dot");
+  const nodeAddr = el("node-addr");
+  const nodeRtt = el("node-rtt");
+  const nodeFails = el("node-fails");
+  const nodeLastOk = el("node-lastok");
+  const nodeConn = el("node-conn");
+
+  const kpiMiners = el("kpi-miners");
+  const kpiHr = el("kpi-hr");
+  const kpiAcc = el("kpi-acc");
+  const kpiRej = el("kpi-rej");
+  const kpiBlocks = el("kpi-blocks");
+
+  const snapLastShare = el("snap-last-share");
+  const snapLastMiner = el("snap-last-miner");
+  const snapLastBlock = el("snap-last-block");
+  const snapLastPayout = el("snap-last-payout");
+
+  // Network stats targets (Pool Health panel)
+  const netHeight = el("net-height");
+  const netHashrate = el("net-hashrate");
+  const netDifficulty = el("net-difficulty");
+  const netReward = el("net-reward");
+  const netLastAge = el("net-last-age");
+  const netAvgBt = el("net-avg-bt");
+  const netLastHash = el("net-last-hash");
+
+  const feed = el("feed");
+
+  // Miner check
+  const minerInput = el("miner-input");
+  const minerBtn = el("miner-btn");
+  const minerClear = el("miner-clear");
+  const minerPicker = el("miner-picker");
+
+  const mMiner = el("m-miner");
+  const mConnected = el("m-connected");
+  const mIP = el("m-ip");
+  const mAcc = el("m-acc");
+  const mRej = el("m-rej");
+  const mLastH = el("m-last-h");
+  const mWork = el("m-work");
+  const mHR = el("m-hr");
+
+  // -------------------------------------------------------------------------
+  // Formatting + math
+  // -------------------------------------------------------------------------
+  function fmtTime(ms){
+    if(!ms) return "—";
+    return new Date(ms).toLocaleTimeString();
+  }
+
+  function fmtUnixSec(sec){
+    if(!sec) return "—";
+    return new Date(sec * 1000).toLocaleTimeString();
+  }
+
+  function fmtMs(ms){
+    if(ms === null || ms === undefined) return "—";
+    const v = Number(ms);
+    if(!isFinite(v)) return "—";
+    return `${v}ms`;
+  }
+
+  function fmtConn(tcp_ms, first_ok_ms){
+    if(tcp_ms === null || tcp_ms === undefined) return "—";
+    const a = Number(tcp_ms);
+    const b = (first_ok_ms === null || first_ok_ms === undefined) ? null : Number(first_ok_ms);
+    if(!isFinite(a)) return "—";
+    if(b === null || !isFinite(b)) return `tcp=${a}ms`;
+    return `tcp=${a}ms first=${b}ms`;
+  }
+
+  function fmtU128Like(v){
+    if (v === null || v === undefined) return "—";
+    try{
+      const s = String(v);
+      return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    } catch {
+      return String(v);
+    }
+  }
+
+  function fmtHashTrunc(s){
+    const v = String(s || "").trim();
+    if(!v || v === "unknown") return "—";
+    if(v.length <= 16) return v;
+    return v.slice(0, 8) + "…" + v.slice(-8);
+  }
+
+  function fmtAgeSeconds(sec){
+    if(sec === null || sec === undefined) return "—";
+    const v = Number(sec);
+    if(!isFinite(v) || v < 0) return "—";
+    if(v < 60) return `${Math.floor(v)}s`;
+    if(v < 3600) return `${Math.floor(v/60)}m ${Math.floor(v%60)}s`;
+    const h = Math.floor(v/3600);
+    const m = Math.floor((v%3600)/60);
+    return `${h}h ${m}m`;
+  }
+
+  // v1.3.3: Format atomic-unit reward into human-readable coin amount.
+  // Uses BigInt to avoid JS Number precision loss on values > 2^53.
+  function fmtReward(v){
+    if(v === null || v === undefined) return "—";
+    try{
+      const raw = BigInt(String(v));
+      const divisor = BigInt(COIN_DIVISOR);
+      const whole = raw / divisor;
+      const frac  = raw % divisor;
+
+      // Pad fractional part to COIN_DECIMALS width, then trim trailing zeros
+      let fracStr = frac.toString().padStart(COIN_DECIMALS, "0").replace(/0+$/, "");
+
+      if(fracStr.length === 0){
+        return `${whole.toLocaleString()} ${COIN_SYMBOL}`;
+      }
+      return `${whole.toLocaleString()}.${fracStr} ${COIN_SYMBOL}`;
+    } catch {
+      return String(v);
+    }
+  }
+
+  function pushTs(arr, ms){
+    arr.push(ms);
+    if(arr.length > MAX_TS) arr.splice(0, arr.length - MAX_TS);
+  }
+
+  function computeHashrateFromTs(arr){
+    if(!arr || arr.length < 2) return null;
+    const n = Math.min(arr.length, HR_WINDOW_SHARES);
+    if(n < 2) return null;
+    const slice = arr.slice(arr.length - n);
+    const dt = (slice[slice.length - 1] - slice[0]) / 1000.0;
+    if(dt <= 0) return null;
+    const sharesPerSec = (slice.length - 1) / dt;
+    return sharesPerSec * SHARE_DIFF;
+  }
+
+  function fmtHashrate(hs){
+    if(hs === null || hs === undefined) return "—";
+    const v = Number(hs);
+    if(!isFinite(v) || v < 0) return "—";
+    if(v >= 1e12) return (v/1e12).toFixed(2) + " TH/s";
+    if(v >= 1e9)  return (v/1e9).toFixed(2)  + " GH/s";
+    if(v >= 1e6)  return (v/1e6).toFixed(2)  + " MH/s";
+    if(v >= 1e3)  return (v/1e3).toFixed(2)  + " KH/s";
+    return v.toFixed(2) + " H/s";
+  }
+
+  // -------------------------------------------------------------------------
+  // Miner aggregation
+  // -------------------------------------------------------------------------
+  function ensureMiner(minerId){
+    if(!state.miners.has(minerId)){
+      state.miners.set(minerId, {
+        connectedSeen: false,
+        ip: null,
+        acc: 0,
+        rej: 0,
+        lastHeight: null,
+        workTotal: "0",
+        lastSeenMs: 0,
+        shareTimesMs: [],
+      });
+    }
+    return state.miners.get(minerId);
+  }
+
+  function refreshMinerPicker(){
+    const ids = Array.from(state.miners.keys()).sort();
+    if(ids.length === 0){
+      minerPicker.style.display = "none";
+      minerPicker.innerHTML = "";
+      return;
+    }
+
+    minerPicker.style.display = "flex";
+    minerPicker.innerHTML = "";
+    for(const id of ids){
+      const chip = document.createElement("div");
+      chip.className = "chip";
+      chip.textContent = id;
+      chip.title = "Click to fill + check";
+      chip.addEventListener("click", () => {
+        minerInput.value = id;
+        setMinerView(id);
+      });
+      minerPicker.appendChild(chip);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // UI updates
+  // -------------------------------------------------------------------------
+  function setConnected(ok){
+    state.connected = ok;
+    statusDot.className = "dot " + (ok ? "ok" : "bad");
+    statusText.textContent = ok ? "Connected ✓" : "Disconnected ✗ (retrying)";
+  }
+
+  function setNodeDot(ok){
+    if(ok === true) nodeDot.className = "ndot ok";
+    else if(ok === false) nodeDot.className = "ndot bad";
+    else nodeDot.className = "ndot";
+  }
+
+  function updateNodeUi(){
+    const n = state.node;
+
+    nodeAddr.textContent = n.addr || "—";
+    nodeRtt.textContent = (n.rtt_ms === null || n.rtt_ms === undefined) ? "—" : fmtMs(n.rtt_ms);
+    nodeFails.textContent = (n.fails === null || n.fails === undefined) ? "—" : String(n.fails);
+    nodeLastOk.textContent = fmtUnixSec(n.last_ok_ts);
+    nodeConn.textContent = fmtConn(n.tcp_connect_ms, n.first_ok_ms);
+
+    setNodeDot(n.ok);
+  }
+
+  function updateNetUi(){
+    const n = state.net;
+
+    netHeight.textContent = (n.height === null || n.height === undefined) ? "—" : fmtU128Like(n.height);
+    netHashrate.textContent = fmtHashrate(n.hashrate_hs);
+    netDifficulty.textContent = (n.difficulty === null || n.difficulty === undefined) ? "—" : fmtU128Like(n.difficulty);
+    netReward.textContent = fmtReward(n.reward);
+    netLastAge.textContent = fmtAgeSeconds(n.last_block_secs_ago);
+    netAvgBt.textContent = fmtAgeSeconds(n.avg_block_time_secs);
+    netLastHash.textContent = fmtHashTrunc(n.last_hash);
+  }
+
+  function updateKpis(){
+    kpiMiners.textContent = String(state.minersActive.size);
+    kpiAcc.textContent = String(state.sharesAccepted);
+    kpiRej.textContent = String(state.sharesRejected);
+    kpiBlocks.textContent = String(state.blocksFound);
+
+    const poolHr = computeHashrateFromTs(state.poolShareTimesMs);
+    kpiHr.textContent = fmtHashrate(poolHr);
+
+    snapLastShare.textContent = state.lastShareHeight ?? "—";
+    snapLastMiner.textContent = state.lastShareMiner ?? "—";
+    snapLastBlock.textContent = state.lastBlockHeight ?? "—";
+    snapLastPayout.textContent = state.lastPayoutHeight ?? "—";
+
+    updateNodeUi();
+    updateNetUi();
+  }
+
+  function addFeed(type, tag, msg){
+    const d = document.createElement("div");
+    d.className = "evt " + type;
+    const t = new Date().toLocaleTimeString();
+    d.innerHTML = `<span class="t">[${t}]</span><span class="tag">${tag}</span> ${msg}`;
+    feed.prepend(d);
+
+    while(feed.children.length > FEED_MAX){
+      feed.removeChild(feed.lastChild);
+    }
+  }
+
+  function setMinerView(minerId){
+    const id = (minerId || "").trim();
+    if(!id){
+      mMiner.textContent = "—";
+      mConnected.textContent = "—";
+      mIP.textContent = "—";
+      mAcc.textContent = "—";
+      mRej.textContent = "—";
+      mLastH.textContent = "—";
+      mWork.textContent = "—";
+      mHR.textContent = "—";
+      return;
+    }
+
+    const m = state.miners.get(id);
+    if(!m){
+      mMiner.textContent = id;
+      mConnected.textContent = "no (not seen)";
+      mIP.textContent = "—";
+      mAcc.textContent = "0";
+      mRej.textContent = "0";
+      mLastH.textContent = "—";
+      mWork.textContent = "0";
+      mHR.textContent = "—";
+      return;
+    }
+
+    mMiner.textContent = id;
+    mConnected.textContent = m.connectedSeen ? "yes" : "no";
+    mIP.textContent = m.ip ?? "—";
+    mAcc.textContent = String(m.acc);
+    mRej.textContent = String(m.rej);
+    mLastH.textContent = (m.lastHeight !== null && m.lastHeight !== undefined) ? String(m.lastHeight) : "—";
+    mWork.textContent = fmtU128Like(m.workTotal);
+
+    const minerHr = computeHashrateFromTs(m.shareTimesMs);
+    mHR.textContent = fmtHashrate(minerHr);
+  }
+
+  // -------------------------------------------------------------------------
+  // Event ingestion
+  // -------------------------------------------------------------------------
+  function ingestEvent(ev){
+    state.lastEvtMs = Date.now();
+    lastEvt.textContent = fmtTime(state.lastEvtMs);
+
+    switch(ev.type){
+      case "MinerConnected": {
+        const miner = String(ev.miner ?? "").trim();
+        const ip = String(ev.ip ?? "").trim();
+        if(miner){
+          state.minersActive.add(miner);
+          const m = ensureMiner(miner);
+          m.connectedSeen = true;
+          m.ip = ip || m.ip;
+          m.lastSeenMs = Date.now();
+        }
+        addFeed("miner", "Miner", `Connected: <span class="accent-cyan">${miner}</span> <span class="t">ip=${ip || "?"}</span>`);
+        refreshMinerPicker();
+        break;
+      }
+
+      case "MinerDisconnected": {
+        const miner = String(ev.miner ?? "").trim();
+        if(miner){
+          state.minersActive.delete(miner);
+          const m = ensureMiner(miner);
+          m.lastSeenMs = Date.now();
+        }
+        addFeed("miner", "Miner", `Disconnected: <span class="accent-red">${miner}</span>`);
+        refreshMinerPicker();
+        break;
+      }
+
+      case "ShareAccepted": {
+        const nowMs = Date.now();
+
+        const miner = String(ev.miner ?? "").trim();
+        const height = (ev.height !== undefined && ev.height !== null) ? Number(ev.height) : null;
+        const workUnits = ev.work_units;
+        const workTotal = ev.work_total;
+
+        state.sharesAccepted += 1;
+        pushTs(state.poolShareTimesMs, nowMs);
+
+        if(miner){
+          state.minersActive.add(miner);
+          const m = ensureMiner(miner);
+
+          m.connectedSeen = true;
+
+          m.acc += 1;
+          m.lastHeight = height ?? m.lastHeight;
+          m.lastSeenMs = nowMs;
+          pushTs(m.shareTimesMs, nowMs);
+
+          if(workTotal !== undefined && workTotal !== null){
+            m.workTotal = String(workTotal);
+          } else if(workUnits !== undefined && workUnits !== null){
+            try{
+              const a = BigInt(m.workTotal);
+              const b = BigInt(String(workUnits));
+              m.workTotal = String(a + b);
+            } catch {}
+          }
+        }
+
+        state.lastShareHeight = height ?? state.lastShareHeight;
+        state.lastShareMiner = miner || state.lastShareMiner;
+
+        addFeed(
+          "share",
+          "Share",
+          `Accepted: <span class="accent-green">${miner}</span> <span class="t">h=${height ?? "?"}</span> <span class="t">work=${fmtU128Like(workUnits ?? "—")}</span>`
+        );
+
+        if((minerInput.value || "").trim() === miner){
+          setMinerView(miner);
+        }
+
+        break;
+      }
+
+      case "ShareRejected": {
+        const miner = String(ev.miner ?? "").trim();
+        const reason = String(ev.reason ?? "").trim();
+
+        state.sharesRejected += 1;
+
+        if(miner){
+          const m = ensureMiner(miner);
+          m.connectedSeen = true;
+          m.rej += 1;
+          m.lastSeenMs = Date.now();
+        }
+
+        addFeed("reject", "Reject", `<span class="accent-red">${miner}</span> <span class="t">${reason || ""}</span>`);
+        refreshMinerPicker();
+        break;
+      }
+
+      case "BlockFound": {
+        const height = (ev.height !== undefined && ev.height !== null) ? Number(ev.height) : null;
+        const reward = (ev.reward !== undefined && ev.reward !== null) ? ev.reward : null;
+
+        state.blocksFound += 1;
+        state.lastBlockHeight = height ?? state.lastBlockHeight;
+
+        addFeed("block", "BLOCK", `Found: <span class="accent-yellow">height=${height ?? "?"}</span> <span class="t">reward=${fmtReward(reward)}</span>`);
+        break;
+      }
+
+      case "PayoutComplete": {
+        const height = (ev.height !== undefined && ev.height !== null) ? Number(ev.height) : null;
+        const minersPaid = (ev.miners_paid !== undefined && ev.miners_paid !== null) ? Number(ev.miners_paid) : null;
+        const poolFee = (ev.pool_fee !== undefined && ev.pool_fee !== null) ? Number(ev.pool_fee) : null;
+
+        state.lastPayoutHeight = height ?? state.lastPayoutHeight;
+
+        addFeed("payout", "Payout", `Complete: <span class="accent-cyan">block=${height ?? "?"}</span> <span class="t">miners=${minersPaid ?? "?"}</span> <span class="t">fee=${poolFee ?? "?"}</span>`);
+        break;
+      }
+
+      case "NodeConnected": {
+        const addr = String(ev.addr ?? "").trim();
+        const tcp = (ev.tcp_connect_ms !== undefined && ev.tcp_connect_ms !== null) ? Number(ev.tcp_connect_ms) : null;
+        const first = (ev.first_ok_ms !== undefined && ev.first_ok_ms !== null) ? Number(ev.first_ok_ms) : null;
+
+        state.node.addr = addr || state.node.addr;
+        state.node.tcp_connect_ms = isFinite(tcp) ? tcp : state.node.tcp_connect_ms;
+        state.node.first_ok_ms = isFinite(first) ? first : state.node.first_ok_ms;
+        state.node.last_update_ms = Date.now();
+        break;
+      }
+
+      case "NodeHealth": {
+        const addr = String(ev.addr ?? "").trim();
+        const ok = !!ev.ok;
+        const rtt = (ev.rtt_ms !== undefined && ev.rtt_ms !== null) ? Number(ev.rtt_ms) : null;
+        const fails = (ev.fails !== undefined && ev.fails !== null) ? Number(ev.fails) : null;
+        const lastOk = (ev.last_ok_ts !== undefined && ev.last_ok_ts !== null) ? Number(ev.last_ok_ts) : null;
+
+        state.node.addr = addr || state.node.addr;
+        state.node.ok = ok;
+        state.node.rtt_ms = isFinite(rtt) ? rtt : state.node.rtt_ms;
+        state.node.fails = isFinite(fails) ? fails : state.node.fails;
+        state.node.last_ok_ts = isFinite(lastOk) ? lastOk : state.node.last_ok_ts;
+        state.node.last_update_ms = Date.now();
+        break;
+      }
+
+      case "NetworkStats": {
+        const hashrate = (ev.hashrate_hs !== undefined && ev.hashrate_hs !== null) ? Number(ev.hashrate_hs) : null;
+        const difficulty = (ev.difficulty !== undefined && ev.difficulty !== null) ? Number(ev.difficulty) : null;
+        const height = (ev.height !== undefined && ev.height !== null) ? Number(ev.height) : null;
+        const reward = (ev.reward !== undefined && ev.reward !== null) ? ev.reward : null;
+        const lastHash = String(ev.last_hash ?? "").trim();
+        const age = (ev.last_block_secs_ago !== undefined && ev.last_block_secs_ago !== null) ? Number(ev.last_block_secs_ago) : null;
+        const avgBt = (ev.avg_block_time_secs !== undefined && ev.avg_block_time_secs !== null) ? Number(ev.avg_block_time_secs) : null;
+
+        state.net.hashrate_hs = isFinite(hashrate) ? hashrate : state.net.hashrate_hs;
+        state.net.difficulty = isFinite(difficulty) ? difficulty : state.net.difficulty;
+        state.net.height = isFinite(height) ? height : state.net.height;
+        state.net.reward = reward ?? state.net.reward;
+        state.net.last_hash = lastHash || state.net.last_hash;
+        state.net.last_block_secs_ago = isFinite(age) ? age : state.net.last_block_secs_ago;
+        state.net.avg_block_time_secs = isFinite(avgBt) ? avgBt : state.net.avg_block_time_secs;
+        state.net.last_update_ms = Date.now();
+        break;
+      }
+
+      case "connected": {
+        addFeed("miner", "System", `<span class="accent-cyan">${ev.message ?? "WS connected"}</span>`);
+        break;
+      }
+
+      default:
+        break;
+    }
+
+    updateKpis();
+    const cur = (minerInput.value || "").trim();
+    if(cur){
+      setMinerView(cur);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // WebSocket (FIXED)
+  // -------------------------------------------------------------------------
+  function connectWs(){
+    const host = window.location.host; // includes port if present
+
+    // If opened as file://, there is no host — WS is impossible.
+    if(!host){
+      setConnected(false);
+      addFeed("reject", "System", "Opened as file:// — open the dashboard via http://<host>:<port>/ (stats server).");
+      return;
+    }
+
+    const proto = (window.location.protocol === "https:") ? "wss://" : "ws://";
+    const wsUrl = `${proto}${host}/ws`;
+
+    wsUrlLabel.textContent = wsUrl;
+
+    let ws;
+    try{
+      ws = new WebSocket(wsUrl);
+    } catch (e){
+      setConnected(false);
+      addFeed("reject", "System", `WebSocket init failed: ${String(e)}`);
+      setTimeout(connectWs, 2500);
+      return;
+    }
+
+    ws.onopen = () => setConnected(true);
+
+    ws.onclose = () => {
+      setConnected(false);
+      setTimeout(connectWs, 2000);
+    };
+
+    ws.onerror = () => {
+      setConnected(false);
+    };
+
+    ws.onmessage = (msg) => {
+      try{
+        const ev = JSON.parse(msg.data);
+        ingestEvent(ev);
+      } catch {
+        // ignore parse failures
+      }
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Controls
+  // -------------------------------------------------------------------------
+  minerBtn.addEventListener("click", () => {
+    const v = (minerInput.value || "").trim();
+    setMinerView(v);
+  });
+
+  minerInput.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){
+      const v = (minerInput.value || "").trim();
+      setMinerView(v);
+    }
+  });
+
+  minerClear.addEventListener("click", () => {
+    minerInput.value = "";
+    setMinerView("");
+  });
+
+  // -------------------------------------------------------------------------
+  // Boot
+  // -------------------------------------------------------------------------
+  setConnected(false);
+  updateKpis();
+  setMinerView("");
+  connectWs();
+})();
+</script>
+
+</body>
+</html>
+<!-- =========================================================================
+File: pool_dashboard.html
+Location: snap-coin-pool/static/pool_dashboard.html
+Version: 1.3.5
+Created: 2026-02-08T22:00:00Z
+Updated: 2026-02-09T02:00:00Z
+========================================================================  -->

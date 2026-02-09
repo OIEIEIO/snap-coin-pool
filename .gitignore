@@ -1,5 +1,4 @@
-/target
-/Cargo.lock
+target/
+pool-data/
+pool-node/
 .env
-node-mainnet
-node-pool
