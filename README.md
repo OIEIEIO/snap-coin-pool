@@ -88,7 +88,8 @@ The dashboard connects to the WebSocket stats server and displays:
 
 ## Screenshots
 
-
+![Dashboard](screenshots/dashboard.png)
+![Backend Logs](screenshots/backend_logs.png)
 
 ------------------------------------------------------------------------
 
