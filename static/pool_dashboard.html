@@ -1,8 +1,20 @@
 <!-- =========================================================================
 File: pool_dashboard.html
 Location: snap-coin-pool/static/pool_dashboard.html
-
-
+Version: 1.6.0-dual-hashrate.1
+Changes from v1.5.5-compact.15:
+  - KPI: Replace "POOL HASHRATE" with "POOL EFFICIENCY" (acc/(acc+rej) %).
+  - NEW: Metrics row between blocks chart and hashrate chart:
+      * Pool Hashrate (green pill)
+      * Network Hashrate (cyan pill)
+      * Pool/Network share % (purple pill)
+  - Hashrate chart: Dual-axis overlay:
+      * Pool hashrate: solid green line, left Y-axis (green ticks)
+      * Network hashrate: dashed cyan line, right Y-axis (cyan ticks)
+      * Independent scales so 1000x gap renders correctly
+      * Legend + inline metric pills in chart header
+  - Data: Load snapshot.timeseries.network_hashrate_1m_24h into state.netHrSeries.
+  - No other layout/logic changes.
 ========================================================================  -->
 <!DOCTYPE html>
 <html lang="en">
