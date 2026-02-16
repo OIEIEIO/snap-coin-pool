@@ -1,20 +1,11 @@
 <!-- =========================================================================
 File: pool_dashboard.html
 Location: snap-coin-pool/static/pool_dashboard.html
-Version: 1.6.0-dual-hashrate.1
+Version: 1.6.1-block-labels.1
 
-Changes from v1.5.5-compact.15:
-  - KPI: Replace "POOL HASHRATE" with "POOL EFFICIENCY" (acc/(acc+rej) %).
-  - NEW: Metrics row between blocks chart and hashrate chart:
-      * Pool Hashrate (green pill)
-      * Network Hashrate (cyan pill)
-      * Pool/Network share % (purple pill)
-  - Hashrate chart: Dual-axis overlay:
-      * Pool hashrate: solid green line, left Y-axis (green ticks)
-      * Network hashrate: dashed cyan line, right Y-axis (cyan ticks)
-      * Independent scales so 1000x gap renders correctly
-      * Legend + inline metric pills in chart header
-  - Data: Load snapshot.timeseries.network_hashrate_1m_24h into state.netHrSeries.
+Changes from v1.6.0-dual-hashrate.1:
+  - Blocks chart: Render block count inside each bar (centered, white bold)
+    when value > 0 and bar height >= 14px.
   - No other layout/logic changes.
 ========================================================================  -->
 <!DOCTYPE html>
@@ -1416,6 +1407,14 @@ Changes from v1.5.5-compact.15:
     for(let i=0;i<n;i++){
       const v=Number(values[i]||0); const bh=Math.floor((v/maxV)*innerH); const x=padL+i*(barW+barGap); const y=padT+(innerH-bh);
       ctx.fillStyle="rgba(111,231,255,0.35)"; ctx.fillRect(x,y,barW,bh);
+      /* ── v1.6.1: block count label inside bar ── */
+      if(v>0&&bh>=14){
+        ctx.fillStyle="rgba(255,255,255,0.92)";
+        ctx.font="bold 11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
+        const lbl=String(v);
+        const tw=ctx.measureText(lbl).width;
+        ctx.fillText(lbl, x+(barW-tw)/2, y+bh/2+4);
+      }
       const showTick=(opts&&typeof opts.tickEvery==="number")?(i===0||i===n-1||(i%opts.tickEvery===0)):(i===0||i===n-1);
       if(showTick){ ctx.fillStyle="rgba(255,255,255,0.45)"; ctx.font="10px "+CSS.supports("font-family","ui-monospace")?"ui-monospace":"monospace"; ctx.font="10px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"; ctx.fillText(labels[i],x,h-6); }
     }
@@ -1886,6 +1885,6 @@ Changes from v1.5.5-compact.15:
 <!-- =========================================================================
 File: pool_dashboard.html
 Location: snap-coin-pool/static/pool_dashboard.html
-Version: 1.6.0-dual-hashrate.1
-Created: 2026-02-15T21:15:00Z
+Version: 1.6.1-block-labels.1
+Created: 2026-02-16T18:30:00Z
 ========================================================================  -->
