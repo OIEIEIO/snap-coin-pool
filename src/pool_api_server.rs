@@ -461,7 +461,7 @@ impl PoolServer {
                             .await;
 
                             match &res {
-                                Ok(_) => {
+                                Ok(share_diff) => {
                                     reject_streak = 0;
 
                                     let node_height = match &height_client {
@@ -469,13 +469,10 @@ impl PoolServer {
                                         None => 0,
                                     };
 
-                                    // FIX v0.1.4-stats.15:
-                                    // Emit the *job* height being solved (tip + 1), not last_block_height (tip - 1).
                                     self.emit(PoolEvent::ShareAccepted {
                                         miner: miner_key.clone(),
                                         height: node_height.saturating_add(1),
-                                        work_units: 1,
-                                        work_total: 1,
+                                        share_diff: *share_diff,
                                         timestamp: now_ts(),
                                     })
                                     .await;
@@ -539,7 +536,7 @@ impl PoolServer {
                                 }
                             }
 
-                            res
+                            res.map(|_| ())
                         },
                     },
                     Request::SubscribeToChainEvents => {

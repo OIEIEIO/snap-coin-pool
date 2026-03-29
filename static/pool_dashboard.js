@@ -1047,15 +1047,12 @@
       case "ShareAccepted": {
         const nowMs=Date.now(); const miner=String(ev.miner??"").trim();
         const height=(ev.height!==undefined&&ev.height!==null)?Number(ev.height):null;
-        const workUnits=ev.work_units; const workTotal=ev.work_total;
         if(!replay){ state.sharesAccepted+=1; savePersisted(); }
         if(miner){
           state.minersActive.add(miner); const m=ensureMiner(miner);
           m.connectedSeen=true; if(!replay) m.acc+=1; m.lastHeight=height??m.lastHeight; m.lastSeenMs=nowMs; if(!replay) pushTs(m.shareTimesMs,nowMs);
-          if(workTotal!==undefined&&workTotal!==null) m.workTotal=String(workTotal);
-          else if(workUnits!==undefined&&workUnits!==null){ try{ m.workTotal=String(BigInt(m.workTotal)+BigInt(String(workUnits))); } catch {} }
         }
-        pushFeedEvent({tsMs:Date.now(),typeClass:"share",cat:FEED_MODE_SHARES,tag:"Share",html:`Accepted: ${minerSpan(miner,"accent-green")} <span class="t">h=${escapeHtml(height??"?")}</span> <span class="t">work=${escapeHtml(fmtU128Like(workUnits??"—"))}</span>`,miners:miner?[miner]:[]});
+        pushFeedEvent({tsMs:Date.now(),typeClass:"share",cat:FEED_MODE_SHARES,tag:"Share",html:`Accepted: ${minerSpan(miner,"accent-green")} <span class="t">h=${escapeHtml(height??"?")}</span> <span class="t">diff=${escapeHtml(fmtU128Like(ev.share_diff??0))}</span>`,miners:miner?[miner]:[]});
         if(!replay){ let cur=(minerInput.value||"").trim(); if(cur&&!cur.startsWith("Public:")) cur="Public: "+cur; if(cur===miner) setMinerView(miner); }
         break;
       }

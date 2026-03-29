@@ -134,8 +134,10 @@ pub enum PoolEvent {
     ShareAccepted {
         miner: String,
         height: u64,
-        work_units: u64,
-        work_total: u64,
+        /// Actual difficulty of the submitted share hash (MAX_TARGET / hash).
+        /// Replaces work_units/work_total which were always hardcoded to 1.
+        #[serde(default)]
+        share_diff: u64,
         timestamp: u64,
     },
     ShareRejected {
@@ -604,7 +606,7 @@ fn spawn_network_stats_tasks(event_tx: broadcast::Sender<PoolEvent>, pool_state:
                     let mut work_units_sum: u64 = 0;
                     for e in snap.recent_shares_acc.iter().rev() {
                         if let PoolEvent::ShareAccepted {
-                            work_units,
+                            share_diff,
                             timestamp,
                             ..
                         } = e
@@ -612,7 +614,7 @@ fn spawn_network_stats_tasks(event_tx: broadcast::Sender<PoolEvent>, pool_state:
                             if *timestamp < window_start {
                                 break;
                             }
-                            work_units_sum = work_units_sum.saturating_add(*work_units);
+                            work_units_sum = work_units_sum.saturating_add(*share_diff);
                         }
                     }
 
