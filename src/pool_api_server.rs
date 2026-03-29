@@ -646,13 +646,19 @@ impl PoolServer {
                         let reward = submit_client.get_reward().await.unwrap_or(0);
                         let miner_key = format!("{:?}", miner_public);
 
-                        // FIX v0.1.4-stats.16: Emit node_height directly (no -1).
+                        // Compute difficulty of the winning share hash.
+                        // Re-use the same helper already in handle_share.rs.
+                        let block_diff = crate::handle_share::block_difficulty_from_hash(
+                            &block.meta.hash.unwrap().dump_buf()
+                        );
+
                         self_clone
                             .emit(PoolEvent::BlockFound {
                                 height: node_height,
                                 hash: format!("{:?}", block.meta.hash),
                                 reward,
                                 miner: miner_key,
+                                block_diff,
                                 timestamp: now_ts(),
                             })
                             .await;

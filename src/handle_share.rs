@@ -25,6 +25,12 @@ use snap_coin::{
 
 use crate::share_store::SharedShareStore;
 
+/// Compute difficulty from hash bytes: MAX_TARGET / hash_value.
+/// Returns 0 if hash is zero (should never happen on a valid share).
+pub fn block_difficulty_from_hash(hash_bytes: &[u8]) -> u64 {
+    share_difficulty_from_hash(hash_bytes)
+}
+
 /// Compute share difficulty from hash bytes: MAX_TARGET / hash_value.
 /// Returns 0 if hash is zero (should never happen on a valid share).
 fn share_difficulty_from_hash(hash_bytes: &[u8]) -> u64 {

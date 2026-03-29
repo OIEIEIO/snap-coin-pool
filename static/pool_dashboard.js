@@ -1133,7 +1133,8 @@
           }
         }
         const minerHtml=miner?` <span class="t">miner=${minerSpan(miner,"accent-cyan")}</span>`:``;
-        pushFeedEvent({tsMs:Date.now(),typeClass:"block",cat:FEED_MODE_BLOCKS,tag:"BLOCK",html:`Found: <span class="accent-yellow">height=${escapeHtml(height??"?")}</span> <span class="t">hash=${bhLink}</span> <span class="t">reward=${escapeHtml(fmtReward(reward))}</span>${minerHtml}`,miners:miner?[miner]:[]});
+        const diffHtml=ev.block_diff?` <span class="t">diff=${escapeHtml(fmtU128Like(ev.block_diff))}</span>`:``;
+        pushFeedEvent({tsMs:Date.now(),typeClass:"block",cat:FEED_MODE_BLOCKS,tag:"BLOCK",html:`Found: <span class="accent-yellow">height=${escapeHtml(height??"?")}</span> <span class="t">hash=${bhLink}</span> <span class="t">reward=${escapeHtml(fmtReward(reward))}</span>${minerHtml}${diffHtml}`,miners:miner?[miner]:[]});
         break;
       }
 

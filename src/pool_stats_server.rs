@@ -153,6 +153,9 @@ pub enum PoolEvent {
         /// with existing pool_state.json files that predate this field.
         #[serde(default)]
         miner: String,
+        /// Difficulty of the winning share hash (MAX_TARGET / hash).
+        #[serde(default)]
+        block_diff: u64,
         timestamp: u64,
     },
     PayoutComplete {
