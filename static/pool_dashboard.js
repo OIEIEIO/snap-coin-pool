@@ -610,7 +610,7 @@
   // -------------------------------------------------------------------------
   // Miner aggregation
   // -------------------------------------------------------------------------
-  function pushTs(arr,ms){ arr.push(ms); if(arr.length>300) arr.splice(0,arr.length-300); }
+  function pushTs(arr,ms){ arr.push(ms); if(arr.length>10000) arr.splice(0,arr.length-10000); }
   function computeHashrateFromTs(arr){
     if(!arr||arr.length<2) return null;
     const n=Math.min(arr.length,20); if(n<2) return null;
@@ -1128,6 +1128,7 @@
             // Track per-miner block count
             if(miner){
               state.minerBlocksFound[miner]=(state.minerBlocksFound[miner]||0)+1;
+              ensureMiner(miner);
               refreshMinerPicker();
             }
             savePersisted();
