@@ -1,14 +1,14 @@
 // =========================================================================
 // File: pool_dashboard.js
 // Location: snap-coin-pool/static/pool_dashboard.js
-// Version: 1.8.1-ban-replay.1
+// Version: 1.8.2-ban-null-miner.1
 //
-// Changes from v1.8.0-split.1:
-//   - FIX: applySnapshot now reads recent_bans (array of PoolEvents) from snapshot
-//          Previously only looked for banned_miners/bannedMiners/bans/ban_list (none present)
-//   - FIX: recent_bans added to snapshot replay merge so ban history appears in feed on load
-//   - FIX: bannedMiners state derived from PoolEvent type (MinerBanned/MinerUnbanned)
-//          rather than flat object shape which didn't match backend schema
+// Changes from v1.8.1-ban-replay.1:
+//   - FIX: MinerBanned.miner is Option<String> — was null for pre-handshake IP bans
+//          causing events to be silently dropped; now falls back to ip field
+//   - FIX: MinerUnbanned handler uses same ip fallback for consistency
+//   - ADD: MinerKicked case in ingestEvent — was hitting default: break and vanishing
+//          Now displays in Banned feed tab with Kicked tag
 // =========================================================================
 
 (() => {
@@ -326,13 +326,15 @@
 
     // ── Bans list — reads recent_bans (array of PoolEvents) from snapshot ──
     // recent_bans contains MinerBanned/MinerUnbanned/MinerKicked PoolEvent objects.
-    // Also supports legacy flat-object ban list formats if backend changes shape.
+    // MinerBanned.miner is Option<String> — may be null (pre-handshake ban by IP).
+    // Fall back to ip field so IP-only bans still appear in the feed.
     const bansList = pick(snap,["recent_bans","banned_miners","bannedMiners","bans","ban_list"]);
     if(Array.isArray(bansList)){
       const out={};
       for(const b of bansList){
         if(!b) continue;
-        const miner=String(pick(b,["miner","id","public","address"])??"").trim();
+        // miner may be null for pre-handshake bans — fall back to ip
+        const miner=String(b.miner||b.id||b.public||b.address||b.ip||"").trim();
         if(!miner) continue;
         const isUnban = b.type==="MinerUnbanned"||b.type==="Unbanned"||b.type==="Unban";
         out[miner]={
@@ -1063,26 +1065,41 @@
       case "MinerBanned":
       case "Ban":
       case "Banned": {
-        const miner=String(ev.miner??ev.id??ev.public??"").trim();
+        // miner is Option<String> — may be null for pre-handshake IP bans; fall back to ip
+        const miner=String(ev.miner||ev.id||ev.public||ev.ip||"").trim();
         const reason=String(ev.reason??ev.message??ev.msg??"").trim();
         const until=ev.until??ev.expires_at??ev.expiresAt??null;
+        const ip=String(ev.ip||"").trim();
         if(miner){
           state.bannedMiners[miner]={miner,reason,until,active:true,banned_at:ev.timestamp??null,unbanned_at:null};
         }
-        pushFeedEvent({tsMs:Date.now(),typeClass:"ban",cat:FEED_MODE_BANNED,tag:"Banned",html:`${minerSpan(miner,"accent-orange")} <span class="t">${escapeHtml(reason||"")}</span>`+(until?` <span class="t">until=${escapeHtml(String(until))}</span>`:``),miners:miner?[miner]:[]});
+        const label=miner?minerSpan(miner,"accent-orange"):escapeHtml(ip||"?");
+        pushFeedEvent({tsMs:Date.now(),typeClass:"ban",cat:FEED_MODE_BANNED,tag:"Banned",html:`${label} <span class="t">${escapeHtml(reason||"")}</span>`+(until?` <span class="t">until=${escapeHtml(String(until))}</span>`:``),miners:miner?[miner]:[]});
         break;
       }
 
       case "MinerUnbanned":
       case "Unban":
       case "Unbanned": {
-        const miner=String(ev.miner??ev.id??ev.public??"").trim();
+        const miner=String(ev.miner||ev.id||ev.public||ev.ip||"").trim();
         const reason=String(ev.reason??ev.message??ev.msg??"").trim();
+        const ip=String(ev.ip||"").trim();
         if(miner && state.bannedMiners[miner]){
           state.bannedMiners[miner].active=false;
           state.bannedMiners[miner].unbanned_at=ev.timestamp??null;
         }
-        pushFeedEvent({tsMs:Date.now(),typeClass:"ban",cat:FEED_MODE_BANNED,tag:"Unbanned",html:`${minerSpan(miner,"accent-green")} <span class="t">${escapeHtml(reason||"")}</span>`,miners:miner?[miner]:[]});
+        const label=miner?minerSpan(miner,"accent-green"):escapeHtml(ip||"?");
+        pushFeedEvent({tsMs:Date.now(),typeClass:"ban",cat:FEED_MODE_BANNED,tag:"Unbanned",html:`${label} <span class="t">${escapeHtml(reason||"")}</span>`,miners:miner?[miner]:[]});
+        break;
+      }
+
+      case "MinerKicked": {
+        // MinerKicked.miner is String (always present), ip always present
+        const miner=String(ev.miner||"").trim();
+        const reason=String(ev.reason??ev.message??ev.msg??"").trim();
+        const ip=String(ev.ip||"").trim();
+        const label=miner?minerSpan(miner,"accent-orange"):escapeHtml(ip||"?");
+        pushFeedEvent({tsMs:Date.now(),typeClass:"ban",cat:FEED_MODE_BANNED,tag:"Kicked",html:`${label} <span class="t">${escapeHtml(reason||"")}</span>`+(ip?` <span class="t">ip=${escapeHtml(ip)}</span>`:``),miners:miner?[miner]:[]});
         break;
       }
 
@@ -1282,6 +1299,6 @@
 // =========================================================================
 // File: pool_dashboard.js
 // Location: snap-coin-pool/static/pool_dashboard.js
-// Version: 1.8.1-ban-replay.1
+// Version: 1.8.2-ban-null-miner.1
 // Created: 2026-03-28T00:00:00Z
 // =========================================================================
