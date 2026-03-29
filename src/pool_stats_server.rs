@@ -593,17 +593,14 @@ fn spawn_network_stats_tasks(event_tx: broadcast::Sender<PoolEvent>, pool_state:
 
                 if has_new_shares && share_is_recent {
                     // Pool hashrate estimate from accepted shares over the last 60s:
-                    // sum(work_units) * pool_difficulty / 60.
+                    // sum(share_diff) / window_secs
                     //
-                    // FIX v1.4.5: Previously this was work_units / 60 which gave
-                    // shares/sec (~0.1) instead of H/s (~8000). Multiplying by
-                    // pool difficulty converts share-work into actual hash-work.
+                    // share_diff = MAX_TARGET / hash already represents actual hash work
+                    // per share, so no need to multiply by pool_difficulty.
                     const WINDOW_SECS: u64 = 60;
                     let window_start = now.saturating_sub(WINDOW_SECS);
 
-                    let pool_diff = snap.pool_difficulty_fixed_num.max(1);
-
-                    let mut work_units_sum: u64 = 0;
+                    let mut share_diff_sum: u64 = 0;
                     for e in snap.recent_shares_acc.iter().rev() {
                         if let PoolEvent::ShareAccepted {
                             share_diff,
@@ -614,12 +611,11 @@ fn spawn_network_stats_tasks(event_tx: broadcast::Sender<PoolEvent>, pool_state:
                             if *timestamp < window_start {
                                 break;
                             }
-                            work_units_sum = work_units_sum.saturating_add(*share_diff);
+                            share_diff_sum = share_diff_sum.saturating_add(*share_diff);
                         }
                     }
 
-                    let pool_hashrate_hs =
-                        (work_units_sum as f64 * pool_diff as f64) / (WINDOW_SECS as f64);
+                    let pool_hashrate_hs = share_diff_sum as f64 / WINDOW_SECS as f64;
                     pool_state.record_hashrate_sample(pool_hashrate_hs).await;
 
                     last_pool_sample_ts = now;
