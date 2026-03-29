@@ -147,6 +147,10 @@ pub enum PoolEvent {
         height: u64,
         hash: String,
         reward: u64,
+        /// Miner who solved the PoW. Defaulted for backwards compatibility
+        /// with existing pool_state.json files that predate this field.
+        #[serde(default)]
+        miner: String,
         timestamp: u64,
     },
     PayoutComplete {

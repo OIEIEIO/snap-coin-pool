@@ -1,14 +1,13 @@
 // =========================================================================
 // File: pool_dashboard.js
 // Location: snap-coin-pool/static/pool_dashboard.js
-// Version: 1.8.2-ban-null-miner.1
+// Version: 1.8.3-block-miner.1
 //
-// Changes from v1.8.1-ban-replay.1:
-//   - FIX: MinerBanned.miner is Option<String> — was null for pre-handshake IP bans
-//          causing events to be silently dropped; now falls back to ip field
-//   - FIX: MinerUnbanned handler uses same ip fallback for consistency
-//   - ADD: MinerKicked case in ingestEvent — was hitting default: break and vanishing
-//          Now displays in Banned feed tab with Kicked tag
+// Changes from v1.8.2-ban-null-miner.1:
+//   - ADD: BlockFound event now carries miner field (requires backend v1.8.3)
+//   - ADD: minerBlocksFound tracked in state, applySnapshot, savePersisted, loadPersisted
+//   - ADD: miner shown as clickable minerlink in Blocks feed
+//   - ADD: block count shown on miner picker chips (⛏ N blocks)
 // =========================================================================
 
 (() => {
@@ -74,6 +73,7 @@
     minerLastPayout: {},
     minerSharesAcc: {},
     minerSharesRej: {},
+    minerBlocksFound: {},
 
     blocksByDay: {},
     blocksByHour: {},
@@ -314,8 +314,10 @@
 
     const mSharesAcc=pick(snap,["minerSharesAcc","miner_shares_acc"]);
     const mSharesRej=pick(snap,["minerSharesRej","miner_shares_rej"]);
+    const mBlocksFound=pick(snap,["minerBlocksFound","miner_blocks_found"]);
     if(mSharesAcc&&typeof mSharesAcc==="object") state.minerSharesAcc=mSharesAcc;
     if(mSharesRej&&typeof mSharesRej==="object") state.minerSharesRej=mSharesRej;
+    if(mBlocksFound&&typeof mBlocksFound==="object") state.minerBlocksFound=mBlocksFound;
 
     const sa=pick(snap,["sharesAccepted","shares_accepted"]);
     const sr=pick(snap,["sharesRejected","shares_rejected"]);
@@ -486,6 +488,7 @@
     if(obj.minerLastPayout&&typeof obj.minerLastPayout==="object") state.minerLastPayout=obj.minerLastPayout;
     if(obj.minerSharesAcc&&typeof obj.minerSharesAcc==="object") state.minerSharesAcc=obj.minerSharesAcc;
     if(obj.minerSharesRej&&typeof obj.minerSharesRej==="object") state.minerSharesRej=obj.minerSharesRej;
+    if(obj.minerBlocksFound&&typeof obj.minerBlocksFound==="object") state.minerBlocksFound=obj.minerBlocksFound;
     if(obj.blocksByDay&&typeof obj.blocksByDay==="object") state.blocksByDay=obj.blocksByDay;
     if(obj.blocksByHour&&typeof obj.blocksByHour==="object") state.blocksByHour=obj.blocksByHour;
     if(Array.isArray(obj.seenPayoutKeys)) state.seenPayoutKeys=new Set(obj.seenPayoutKeys.slice(-MAX_SEEN_KEYS));
@@ -512,6 +515,7 @@
       totalPaidToMinersAtomic:state.totalPaidToMinersAtomic,
       minerPaidTotals:state.minerPaidTotals, minerLastPayout:state.minerLastPayout,
       minerSharesAcc:state.minerSharesAcc, minerSharesRej:state.minerSharesRej,
+      minerBlocksFound:state.minerBlocksFound,
       blocksByDay:state.blocksByDay, blocksByHour:state.blocksByHour,
       seenPayoutKeys:Array.from(state.seenPayoutKeys).slice(-MAX_SEEN_KEYS),
       seenBlockKeys:Array.from(state.seenBlockKeys).slice(-MAX_SEEN_KEYS),
@@ -623,7 +627,10 @@
     if(ids.length===0){ minerPicker.style.display="none"; minerPicker.innerHTML=""; return; }
     minerPicker.style.display="flex"; minerPicker.innerHTML="";
     for(const id of ids){
-      const chip=document.createElement("div"); chip.className="chip"; chip.textContent=id; chip.title="Click to fill + check";
+      const blocks=state.minerBlocksFound[id]||0;
+      const label=blocks>0?`${id}  ⛏ ${blocks}`:id;
+      const chip=document.createElement("div"); chip.className="chip"; chip.textContent=label;
+      chip.title=blocks>0?`${blocks} block${blocks===1?"":"s"} found — click to check miner`:"Click to fill + check";
       chip.addEventListener("click",()=>{ minerInput.value=id; setMinerView(id); renderFeed(); });
       minerPicker.appendChild(chip);
     }
@@ -1106,13 +1113,29 @@
       case "BlockFound": {
         const height=(ev.height!==undefined&&ev.height!==null)?Number(ev.height):null;
         const reward=(ev.reward!==undefined&&ev.reward!==null)?ev.reward:null;
+        const miner=String(ev.miner||"").trim();
         let bh=String(ev.hash??"").trim();
         const match=bh.match(/Hash:\s*([^)]+)/); if(match&&match[1]) bh=match[1].trim();
         if(bh.startsWith("Hash:")) bh=bh.replace(/^Hash:\s*/,"");
         const bhUrl=explorerBlockUrl(bh); const bhLink=bh?explorerLink(bhUrl,bh):"—";
         const blockKey=`block:${height??"?"}`;
-        if(!replay){ const isNew=addSeenKey(state.seenBlockKeys,blockKey); if(isNew){ state.blocksFound+=1; bumpBlocksToday(); bumpBlocksThisHour(); savePersisted(); markChartsDirty("blocks"); } }
-        pushFeedEvent({tsMs:Date.now(),typeClass:"block",cat:FEED_MODE_BLOCKS,tag:"BLOCK",html:`Found: <span class="accent-yellow">height=${escapeHtml(height??"?")}</span> <span class="t">hash=${bhLink}</span> <span class="t">reward=${escapeHtml(fmtReward(reward))}</span>`,miners:[]});
+        if(!replay){
+          const isNew=addSeenKey(state.seenBlockKeys,blockKey);
+          if(isNew){
+            state.blocksFound+=1;
+            bumpBlocksToday();
+            bumpBlocksThisHour();
+            // Track per-miner block count
+            if(miner){
+              state.minerBlocksFound[miner]=(state.minerBlocksFound[miner]||0)+1;
+              refreshMinerPicker();
+            }
+            savePersisted();
+            markChartsDirty("blocks");
+          }
+        }
+        const minerHtml=miner?` <span class="t">miner=${minerSpan(miner,"accent-cyan")}</span>`:``;
+        pushFeedEvent({tsMs:Date.now(),typeClass:"block",cat:FEED_MODE_BLOCKS,tag:"BLOCK",html:`Found: <span class="accent-yellow">height=${escapeHtml(height??"?")}</span> <span class="t">hash=${bhLink}</span> <span class="t">reward=${escapeHtml(fmtReward(reward))}</span>${minerHtml}`,miners:miner?[miner]:[]});
         break;
       }
 
@@ -1299,6 +1322,6 @@
 // =========================================================================
 // File: pool_dashboard.js
 // Location: snap-coin-pool/static/pool_dashboard.js
-// Version: 1.8.2-ban-null-miner.1
+// Version: 1.8.3-block-miner.1
 // Created: 2026-03-28T00:00:00Z
 // =========================================================================

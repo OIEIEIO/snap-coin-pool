@@ -263,6 +263,10 @@ pub struct PoolSnapshot {
 
     #[serde(default)]
     pub miner_shares_rej: HashMap<String, u64>,
+
+    // Per-miner block counts (persisted in pool_state.json)
+    #[serde(default)]
+    pub miner_blocks_found: HashMap<String, u64>,
 }
 
 // Legacy schema loader (pre split): recent_events
@@ -310,6 +314,9 @@ struct Inner {
     // Per-miner share counts (in-memory, persisted via pool_state.json)
     miner_shares_acc: HashMap<String, u64>,
     miner_shares_rej: HashMap<String, u64>,
+
+    // Per-miner block counts (in-memory, persisted via pool_state.json)
+    miner_blocks_found: HashMap<String, u64>,
 
     dirty: bool,
     state_file: PathBuf,
@@ -530,6 +537,7 @@ impl PoolState {
         // ── Per-miner share counts: load from persisted snapshot ─────────────
         let snapshot_shares_acc = snapshot.miner_shares_acc.clone();
         let snapshot_shares_rej = snapshot.miner_shares_rej.clone();
+        let snapshot_blocks_found = snapshot.miner_blocks_found.clone();
 
         println!(
             "[poolstate] Loaded per-miner share counts from state: {} miners with shares",
@@ -555,6 +563,7 @@ impl PoolState {
             miner_last_payout,
             miner_shares_acc: snapshot_shares_acc,
             miner_shares_rej: snapshot_shares_rej,
+            miner_blocks_found: snapshot_blocks_found,
             dirty: false,
             state_file: state_path,
             ledger_enable,
@@ -593,6 +602,7 @@ impl PoolState {
         // Per-miner share counts into snapshot
         g.snapshot.miner_shares_acc = g.miner_shares_acc.clone();
         g.snapshot.miner_shares_rej = g.miner_shares_rej.clone();
+        g.snapshot.miner_blocks_found = g.miner_blocks_found.clone();
 
         // Blocks series (ensure up-to-date even if client polls infrequently)
         rebuild_block_timeseries_daily_from_daily(&mut g.snapshot);
@@ -693,6 +703,7 @@ impl PoolState {
             PoolEvent::BlockFound {
                 height,
                 hash,
+                miner,
                 timestamp,
                 ..
             } => {
@@ -700,6 +711,12 @@ impl PoolState {
                 g.snapshot.last_block.height = *height;
                 g.snapshot.last_block.hash = hash.clone();
                 g.snapshot.last_block.timestamp = *timestamp;
+
+                // Per-miner block count accumulation
+                if !miner.is_empty() {
+                    let entry = g.miner_blocks_found.entry(miner.clone()).or_insert(0u64);
+                    *entry = entry.saturating_add(1);
+                }
 
                 bump_daily_blocks(&mut g.snapshot.daily_buckets, *timestamp);
                 truncate_daily(&mut g.snapshot.daily_buckets);
@@ -832,6 +849,7 @@ impl PoolState {
                 // Per-miner share counts into snapshot
                 g.snapshot.miner_shares_acc = g.miner_shares_acc.clone();
                 g.snapshot.miner_shares_rej = g.miner_shares_rej.clone();
+                g.snapshot.miner_blocks_found = g.miner_blocks_found.clone();
 
                 // Derived blocks series
                 rebuild_block_timeseries_daily_from_daily(&mut g.snapshot);

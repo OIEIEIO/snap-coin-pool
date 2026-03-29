@@ -639,7 +639,7 @@ impl PoolServer {
                 let self_clone = self_clone.clone();
                 let submit_client = submit_client.clone();
 
-                if let Some((block, _public)) = submit {
+                if let Some((block, miner_public)) = submit {
                     if let Err(e) = async move {
                         // NOTE: submit_block uses a clone, so we still own `block` here.
                         submit_client.submit_block(block.clone()).await??;
@@ -647,6 +647,7 @@ impl PoolServer {
 
                         let node_height = submit_client.get_height().await.unwrap_or(0) as u64;
                         let reward = submit_client.get_reward().await.unwrap_or(0);
+                        let miner_key = format!("{:?}", miner_public);
 
                         // FIX v0.1.4-stats.16: Emit node_height directly (no -1).
                         self_clone
@@ -654,6 +655,7 @@ impl PoolServer {
                                 height: node_height,
                                 hash: format!("{:?}", block.meta.hash),
                                 reward,
+                                miner: miner_key,
                                 timestamp: now_ts(),
                             })
                             .await;
