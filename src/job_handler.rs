@@ -1,9 +1,19 @@
+// =============================================================================
+// File: src/job_handler.rs
+// Project: snap-coin-pool
+// Version: 1.1.0
+// Description: Job handler with reconnect/backoff logic on TCP connection loss.
+//              When build_job fails, the dead job_client is dropped and
+//              Client::connect() is retried with exponential backoff.
+// =============================================================================
+
 use std::{
     net::SocketAddr,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
+    time::Duration,
 };
 
 use snap_coin::{
@@ -18,7 +28,7 @@ use snap_coin::{
     crypto::keys::Private,
     economics::EXPIRATION_TIME,
 };
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, Mutex};
 
 async fn get_current_mempool(
     client: &Client,
@@ -43,7 +53,7 @@ impl JobHandler {
         pool_private: Private,
     ) -> Result<(Self, Block), ApiError> {
         let event_client = Client::connect(node_api).await?;
-        let job_client = Arc::new(Client::connect(node_api).await?);
+        let job_client = Arc::new(Mutex::new(Client::connect(node_api).await?));
 
         let (job_tx, _job_rx) = broadcast::channel::<Block>(24);
 
@@ -51,7 +61,7 @@ impl JobHandler {
         let job_tx = Arc::new(job_tx);
         let is_building = Arc::new(AtomicBool::new(false));
 
-        let first_job = build_job(&job_client, &is_building, pool_private, &job_tx)
+        let first_job = build_job(&job_client, &is_building, pool_private, &job_tx, node_api)
             .await
             .expect("Could not get first job!"); // Build first job before events
 
@@ -63,7 +73,7 @@ impl JobHandler {
                         let job_client = job_client.clone();
                         let job_tx = job_tx.clone();
                         tokio::spawn(async move {
-                            build_job(&job_client, &is_building, pool_private, &job_tx).await;
+                            build_job(&job_client, &is_building, pool_private, &job_tx, node_api).await;
                             is_building.store(false, Ordering::Relaxed);
                         });
                     },
@@ -72,7 +82,6 @@ impl JobHandler {
                 .await
                 .unwrap();
         });
-
 
         Ok((JobHandler { tx_subscriber }, first_job))
     }
@@ -83,20 +92,23 @@ impl JobHandler {
 }
 
 async fn build_job(
-    job_client: &Client,
+    job_client: &Arc<Mutex<Client>>,
     is_building: &Arc<AtomicBool>,
     pool_private: Private,
     job_tx: &broadcast::Sender<Block>,
+    node_api: SocketAddr,
 ) -> Option<Block> {
     if is_building.load(Ordering::Relaxed) {
         return None;
     }
     is_building.store(true, Ordering::Relaxed);
-    Some(
-        match async move {
+
+    let result = {
+        let client = job_client.lock().await;
+        async move {
             let block = build_block(
-                &*job_client,
-                &get_current_mempool(&*job_client).await?,
+                &*client,
+                &get_current_mempool(&*client).await?,
                 pool_private.to_public(),
             )
             .await?;
@@ -106,12 +118,37 @@ async fn build_job(
             Ok::<Block, anyhow::Error>(block)
         }
         .await
-        {
-            Ok(block) => block,
-            Err(e) => {
-                println!("[JOB] Job Handler failed: {}", e);
-                return None;
+    };
+
+    match result {
+        Ok(block) => Some(block),
+        Err(e) => {
+            println!("[JOB] Job Handler failed: {} — reconnecting...", e);
+
+            // Reconnect with exponential backoff
+            let mut backoff = Duration::from_secs(2);
+            loop {
+                tokio::time::sleep(backoff).await;
+                match Client::connect(node_api).await {
+                    Ok(new_client) => {
+                        *job_client.lock().await = new_client;
+                        println!("[JOB] Reconnected to node.");
+                        break;
+                    }
+                    Err(e) => {
+                        println!("[JOB] Reconnect failed: {} — retrying in {}s", e, backoff.as_secs());
+                        backoff = (backoff * 2).min(Duration::from_secs(60));
+                    }
+                }
             }
-        },
-    )
+
+            None
+        }
+    }
 }
+
+// =============================================================================
+// File: src/job_handler.rs
+// Project: snap-coin-pool
+// Created: 2026-04-07T00:00:00Z
+// =============================================================================
